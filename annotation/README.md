@@ -135,6 +135,17 @@ These are environment variables, or `annotation/.env` (see `.env.example`).
 
 ## Hosting
 
+**Render:** `render.yaml` at the repository root is a Blueprint that creates the web service and its
+Postgres database (Render dashboard → New → Blueprint). After the first deploy, load the data and create
+accounts from your own computer, using the database's *External Database URL* from the Render dashboard
+(free web services have no shell):
+
+```sh
+cd annotation
+DATABASE_URL='<External Database URL>' .venv/bin/python scripts/load_outbreaks.py
+DATABASE_URL='<External Database URL>' .venv/bin/python scripts/create_user.py admin --admin --generate
+```
+
 The image is built from the **repository root**, so the loader can reach `raw_data/`:
 
 ```sh
