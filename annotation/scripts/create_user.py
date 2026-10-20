@@ -10,20 +10,15 @@ The password is prompted for, read from stdin with --password-stdin, or generate
 
 import argparse
 import getpass
-import re
 import secrets
 import sys
 
 import _path  # noqa: F401
 from sqlalchemy import select
 
-from app.auth import hash_password
+from app.auth import MIN_PASSWORD_LENGTH, USERNAME_RE, USERNAME_RULE, hash_password
 from app.db import SessionLocal
 from app.models import User
-
-USERNAME_RE = re.compile(r"^[a-z0-9_.-]{2,64}$")
-MIN_PASSWORD_LENGTH = 10
-
 
 def get_password(args) -> tuple[str, bool]:
     """Returns (password, was_generated)."""
@@ -57,7 +52,7 @@ def main() -> None:
 
     username = args.username.strip().lower()
     if not USERNAME_RE.match(username):
-        sys.exit("Username must be 2-64 characters: lowercase letters, digits, '_', '.', '-'")
+        sys.exit(f"Username must be {USERNAME_RULE}")
 
     with SessionLocal() as db:
         user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()

@@ -145,3 +145,14 @@ h3.sub .conf-hint { font-weight: 400; margin-left: 6px; }
 .hist-bar { width: 100%; max-width: 24px; background: var(--series-1); border-radius: 4px 4px 0 0; min-height: 0; }
 .hist-n { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; font-variant-numeric: tabular-nums; }
 .hist-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.user-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 12px; align-items: end; }
+.user-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+.user-form input:not([type="checkbox"]), tr.inline-edit input:not([type="checkbox"]) { font: inherit; padding: 7px 9px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--surface-0); color: var(--text-primary); }
+.user-form-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: flex-end; }
+label.check { flex-direction: row !important; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); }
+tr.inactive td { color: var(--text-muted); }
+td.actions-cell { white-space: nowrap; text-align: right; }
+tr.inline-edit td { background: var(--surface-0); }
+tr.inline-edit input:not([type="checkbox"]) { min-width: 260px; }

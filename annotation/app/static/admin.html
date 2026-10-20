@@ -22,6 +22,25 @@
   <h2>Annotators</h2>
   <section class="card"><div class="table-wrap"><table id="annotators"></table></div></section>
 
+  <h2>Users</h2>
+  <section class="card">
+    <div class="table-wrap" style="max-height:none"><table id="users"></table></div>
+    <h3 class="sub">Add a user</h3>
+    <form id="user-form" class="user-form" autocomplete="off" novalidate>
+      <label>Username<input name="username" required autocapitalize="none" spellcheck="false" placeholder="e.g. jdoe"></label>
+      <label>Password<input name="password" type="password" required autocomplete="new-password" placeholder="at least 8 characters"></label>
+      <label>Display name<input name="display_name" placeholder="optional"></label>
+      <label>Affiliation<input name="affiliation" placeholder="optional"></label>
+      <label>Expertise<input name="expertise" placeholder="optional"></label>
+      <div class="user-form-actions">
+        <label class="check"><input type="checkbox" id="show-password"> Show password</label>
+        <label class="check"><input type="checkbox" name="is_admin"> Admin</label>
+        <button class="primary" type="submit">Add user</button>
+      </div>
+    </form>
+    <div class="status" id="user-status" role="status"></div>
+  </section>
+
   <h2>Agreement by disease</h2>
   <section class="card"><div class="table-wrap"><table id="agreement"></table></div>
     <p class="conf-hint">Fleiss' kappa over outbreaks with at least two non-skip labels (Outbreak / Not an outbreak / Unsure).</p>

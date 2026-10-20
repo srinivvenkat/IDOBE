@@ -108,6 +108,95 @@ $("retrain").addEventListener("click", async () => {
   await loadModel();
 });
 
+// ---------- users ----------
+async function apiJson(path, method, body) {
+  const r = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = data.detail;
+    throw new Error(Array.isArray(d) ? d.map((e) => e.msg.replace(/^Value error, /, "")).join("; ") : d || `Failed (${r.status})`);
+  }
+  return data;
+}
+
+function userStatus(text, isError = false) {
+  $("user-status").textContent = text;
+  $("user-status").classList.toggle("err", isError);
+}
+
+function passwordRow(u, cols) {
+  const input = el("input", { type: "password", placeholder: "new password (at least 8 characters)", autocomplete: "new-password" });
+  const show = el("input", { type: "checkbox" });
+  show.addEventListener("change", () => { input.type = show.checked ? "text" : "password"; });
+  const save = el("button", { className: "primary", textContent: "Save" });
+  const cancel = el("button", { textContent: "Cancel" });
+  const row = el("tr", { className: "inline-edit" }, el("td", { colSpan: cols },
+    el("div", { className: "row" }, el("span", { textContent: `New password for ${u.username}:` }), input,
+      el("label", { className: "check" }, show, " Show"), save, cancel)));
+  const submit = async () => {
+    try {
+      await apiJson(`/api/admin/users/${encodeURIComponent(u.username)}`, "PATCH", { password: input.value });
+      userStatus(`Password updated for ${u.username}.`);
+      await loadUsers();
+    } catch (err) { userStatus(err.message, true); }
+  };
+  save.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") row.remove(); });
+  cancel.addEventListener("click", () => row.remove());
+  setTimeout(() => input.focus(), 0);
+  return row;
+}
+
+async function loadUsers() {
+  const r = await fetch("/api/admin/users");
+  if (!r.ok) return;
+  const users = await r.json();
+  const headers = ["Username", "Name", "Affiliation", "Expertise", "Role", "Labeled", "Status", ""];
+  const rows = users.map((u) => {
+    const setPw = el("button", { className: "link", textContent: "Set password" });
+    const toggle = el("button", { className: "link", textContent: u.is_active ? "Deactivate" : "Activate" });
+    const tr = el("tr", { className: u.is_active ? "" : "inactive" },
+      ...[u.username, u.display_name, u.affiliation, u.expertise, u.is_admin ? "admin" : "expert",
+        u.n_labels, u.is_active ? "active" : "deactivated"]
+        .map((v, i) => el("td", { className: i === 5 ? "num" : "", textContent: fmt(v) })),
+      el("td", { className: "actions-cell" }, setPw, toggle));
+    setPw.addEventListener("click", () => {
+      const next = tr.nextElementSibling;
+      if (next?.classList.contains("inline-edit")) { next.remove(); return; }
+      tr.after(passwordRow(u, headers.length));
+    });
+    toggle.addEventListener("click", async () => {
+      try {
+        await apiJson(`/api/admin/users/${encodeURIComponent(u.username)}`, "PATCH", { is_active: !u.is_active });
+        userStatus(`${u.username} ${u.is_active ? "deactivated (their labels are kept)" : "reactivated"}.`);
+        await loadUsers();
+      } catch (err) { userStatus(err.message, true); }
+    });
+    return tr;
+  });
+  $("users").replaceChildren(
+    el("thead", {}, el("tr", {}, ...headers.map((h, i) => el("th", { className: i === 5 ? "num" : "", textContent: h })))),
+    el("tbody", {}, ...rows));
+}
+
+$("show-password").addEventListener("change", (e) => {
+  $("user-form").password.type = e.target.checked ? "text" : "password";
+});
+$("user-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    const u = await apiJson("/api/admin/users", "POST", {
+      username: f.username.value, password: f.password.value, display_name: f.display_name.value,
+      affiliation: f.affiliation.value, expertise: f.expertise.value, is_admin: f.is_admin.checked,
+    });
+    userStatus(`Created ${u.is_admin ? "admin" : "expert"} account “${u.username}”.`);
+    f.reset();
+    f.password.type = "password";
+    await loadUsers();
+  } catch (err) { userStatus(err.message, true); }
+});
+
 (async () => {
   const r = await fetch("/api/admin/stats");
   if (r.status === 401) { location.href = "/login"; return; }
@@ -133,5 +222,5 @@ $("retrain").addEventListener("click", async () => {
   table("agreement", ["Disease", "Series with 2+ labels", "Unanimous", "Fleiss' kappa"],
     [["All", s.agreement.overall], ...Object.entries(s.agreement.by_disease)].map(([d, a]) =>
       [d, a.outbreaks_with_2plus_labels, a.unanimous, kappa(a.fleiss_kappa)]), [1, 2, 3]);
-  await loadModel();
+  await Promise.all([loadUsers(), loadModel()]);
 })().catch((err) => { $("status").textContent = err.message; });

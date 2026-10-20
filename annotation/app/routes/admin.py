@@ -9,13 +9,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..analysis import agreement_summary, current_annotations, vote_counts_subquery
-from ..auth import admin_user
+from ..auth import admin_user, hash_password
 from ..config import settings
 from ..db import get_db
 from ..ml.results import RESULT_COLUMNS, series_results
 from ..ml.train import is_training, latest_run, readiness, retrain_if_due
 from ..models import Annotation, ModelPrediction, ModelRun, Outbreak, User
 from ..queue import early_stop_active
+from ..schemas import UserCreateIn, UserUpdateIn
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -151,3 +152,48 @@ def predictions(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     """Every series with its expert answers, model score and final label."""
     rows = series_results(db)
     return _csv_response(RESULT_COLUMNS, ([r[c] for c in RESULT_COLUMNS] for r in rows), "series_labels.csv")
+
+
+def _user_row(u: User, n_labels: int = 0) -> dict:
+    return {"username": u.username, "display_name": u.display_name, "affiliation": u.affiliation,
+            "expertise": u.expertise, "is_admin": u.is_admin, "is_active": u.is_active,
+            "created_at": u.created_at.isoformat(), "n_labels": n_labels}
+
+
+@router.get("/users")
+def list_users(_: User = Depends(admin_user), db: Session = Depends(get_db)):
+    labels = dict(db.execute(
+        select(Annotation.user_id, func.count(func.distinct(Annotation.outbreak_id)))
+        .where(Annotation.label != "skip").group_by(Annotation.user_id)
+    ).all())
+    users = db.execute(select(User).order_by(User.username)).scalars()
+    return [_user_row(u, labels.get(u.id, 0)) for u in users]
+
+
+@router.post("/users", status_code=201)
+def create_user(body: UserCreateIn, _: User = Depends(admin_user), db: Session = Depends(get_db)):
+    if db.execute(select(User.id).where(User.username == body.username)).first():
+        raise HTTPException(409, f"User {body.username!r} already exists")
+    user = User(username=body.username, password_hash=hash_password(body.password),
+                display_name=body.display_name, affiliation=body.affiliation, expertise=body.expertise,
+                is_admin=body.is_admin)
+    db.add(user)
+    db.commit()
+    return _user_row(user)
+
+
+@router.patch("/users/{username}")
+def update_user(username: str, body: UserUpdateIn, me: User = Depends(admin_user), db: Session = Depends(get_db)):
+    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(404, "User not found")
+    if user.id == me.id and (body.is_active is False or body.is_admin is False):
+        raise HTTPException(400, "You can't deactivate or remove admin rights from your own account")
+    if body.password is not None:
+        user.password_hash = hash_password(body.password)
+    if body.is_active is not None:
+        user.is_active = body.is_active
+    if body.is_admin is not None:
+        user.is_admin = body.is_admin
+    db.commit()
+    return _user_row(user)

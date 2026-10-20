@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .auth import MIN_PASSWORD_LENGTH, USERNAME_RE, USERNAME_RULE
 
 from .models import Annotation, Outbreak
 
@@ -9,6 +11,48 @@ from .models import Annotation, Outbreak
 class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=256)
+
+
+class UserCreateIn(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=256)
+    display_name: str | None = Field(default=None, max_length=128)
+    affiliation: str | None = Field(default=None, max_length=255)
+    expertise: str | None = Field(default=None, max_length=255)
+    is_admin: bool = False
+
+    @field_validator("username")
+    @classmethod
+    def _username(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not USERNAME_RE.match(v):
+            raise ValueError(f"Username must be {USERNAME_RULE}")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+        return v
+
+    @field_validator("display_name", "affiliation", "expertise")
+    @classmethod
+    def _blank_to_none(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
+
+
+class UserUpdateIn(BaseModel):
+    password: str | None = Field(default=None, max_length=256)
+    is_active: bool | None = None
+    is_admin: bool | None = None
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str | None) -> str | None:
+        if v is not None and len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+        return v
 
 
 class AnnotationIn(BaseModel):

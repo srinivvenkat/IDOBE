@@ -46,7 +46,9 @@ series that already has annotations changed.
 
 ## Managing experts
 
-There is no public sign-up. Accounts are created from the command line:
+There is no public sign-up. Admins create accounts on `/admin` → **Users**: pick a username and a
+password (at least 8 characters), set a new password for anyone, or deactivate an account (their labels
+are kept). The same can be done from the command line:
 
 ```sh
 python scripts/create_user.py alice --display-name "Alice Smith" --expertise "measles"  # prompts for a password

@@ -1,5 +1,6 @@
 """Password hashing, session helpers, and a small in-memory login rate limiter."""
 
+import re
 import time
 from collections import defaultdict, deque
 
@@ -11,6 +12,10 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import get_db
 from .models import User
+
+USERNAME_RE = re.compile(r"^[a-z0-9_.-]{2,64}$")
+USERNAME_RULE = "2-64 characters: lowercase letters, digits, '_', '.', '-'"
+MIN_PASSWORD_LENGTH = 8
 
 _hasher = PasswordHasher()
 # Verified against when the username doesn't exist, so response time doesn't reveal valid usernames.
