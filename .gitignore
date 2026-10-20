@@ -210,3 +210,4 @@ relegated/
 
 # Synthetic generated data (reproducible via synthetic/generate.py --seed 0)
 synthetic/output/synthetic_outbreaks.csv
+.DS_Store
