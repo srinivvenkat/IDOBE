@@ -32,6 +32,7 @@ async def security_headers(request: Request, call_next):
 for r in (auth.router, outbreaks.router, annotations.router, admin.router):
     app.include_router(r)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/guide", StaticFiles(directory=ANNOTATION_DIR / "docs", html=True), name="guide")
 
 
 @app.get("/healthz", include_in_schema=False)

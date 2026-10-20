@@ -55,7 +55,7 @@ async function loadModel() {
   tiles("model-tiles", [
     ["Cross-validated AUC", met.cv_auc === null ? "–" : met.cv_auc.toFixed(3), "1 = perfect, 0.5 = chance"],
     ["Accuracy on random sample", pct(rs.accuracy), rs.n ? `${rs.n} randomly drawn series` : "no random-draw labels yet"],
-    ["Outbreak share (random sample)", pct(rs.share_outbreak), "expert majority, unbiased estimate"],
+    ["Outbreak share (random sample)", pct(rs.share_outbreak), "expert majority in the sampled eligible pool"],
     ["Predicted outbreaks", `${p.n_predicted_outbreak.toLocaleString()} / ${p.n.toLocaleString()}`],
     ["Uncertain series", p.n_uncertain.toLocaleString(), "model probability 0.25–0.75"],
     ["Fewer labels for easy series", m.early_stop.active ? "On" : "Off",

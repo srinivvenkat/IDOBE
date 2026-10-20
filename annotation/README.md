@@ -17,6 +17,13 @@ Every answer is stored in a database, and edits are kept as history.
 Stack: FastAPI, SQLAlchemy, Alembic and scikit-learn. It runs on SQLite locally and on Postgres when hosted,
 with the same code. The frontend is plain HTML/JS with Plotly.
 
+See [UI and deployment review](REVIEW.md) for the current assessment and remaining pilot priorities.
+The proposed [annotation rubric](docs/annotation-rubric-draft.md) and
+[seven-step tutorial preview](docs/tutorial/index.html) are drafts for study-team review.
+Use **Tutorial & examples** at the top of the annotation page to open the guide in a new tab
+(`/guide/tutorial/`), keeping the current annotation in place. The guide saves nothing.
+It is served by the app, so no separate preview server is needed. The preview file also opens directly in a browser.
+
 ## Run locally
 
 The quickest way, from any terminal:
@@ -91,10 +98,11 @@ With `QUEUE_ORDER=active` (the default):
    up to `TARGET_ANNOTATIONS` experts.
 
 Every annotation records how the series was served (`served_as`: `random`, `uncertain`, `revisit` or
-`lookup`), and every served series is logged in `assignments`. Series whose first label came from a random
-draw form an unbiased sample. `/admin` uses it to report model accuracy and the share of segments that are
-really outbreaks. Accuracy measured on every labeled series would look worse than it is, because the queue
-deliberately seeks out hard cases.
+`lookup`), and every served series is logged in `assignments`. `/admin` reports model accuracy and outbreak
+share for series whose first non-skip label came from a random draw. This is a descriptive sample of the
+eligible queue, not a guaranteed unbiased sample of the entire dataset: eligibility changes as series
+are labeled or stopped early, and skips and unresolved votes further affect the evaluated subset.
+For population estimates, reserve a fixed random evaluation sample independently of the active queue.
 
 **Final labels** (`/admin` → *All series with final labels*, or `series_labels.csv` from the export
 script): the expert majority where one exists, otherwise the model's call, with `label_source` saying which
@@ -136,6 +144,25 @@ These are environment variables, or `annotation/.env` (see `.env.example`).
 | `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` | 10 / 900 | Failed-login limit per IP and per username |
 
 ## Hosting
+
+### GitHub Pages versus the annotation service
+
+[GitHub Pages serves static sites and cannot run Python server code](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site).
+Publishing `app/static/` alone will not provide login, queues, saved annotations, or admin exports.
+The current frontend expects FastAPI on the same origin (`/api/...`, `/login`, `/admin`).
+
+The simplest deployment is to host the complete app and Postgres together using the Render Blueprint
+below. A `github.io` project page can explain the study and link to the hosted annotation app.
+For a scheduled expert pilot, consider an always-on web service:
+[Render's free web services sleep after inactivity](https://render.com/docs/free), which delays sign-in.
+
+Serving the interactive frontend itself from `github.io` would require a separately hosted API,
+configurable API and asset paths (including a repository subpath such as `/IDOBE/`), explicit credentialed
+CORS, and a reviewed cross-site authentication/CSRF strategy. The existing `SameSite=Lax` session
+cookie is designed for same-origin deployment; changing URLs alone is insufficient.
+Do not publish the SQLite database, `.env`, or annotation exports as static assets.
+
+### Render / container hosting
 
 **Render:** `render.yaml` at the repository root is a Blueprint that creates the web service and its
 Postgres database (Render dashboard → New → Blueprint). After the first deploy, load the data and create
@@ -180,4 +207,5 @@ Notes:
 ```sh
 .venv/bin/python -m pytest
 TEST_DATABASE_URL=postgresql://user:pass@localhost/idobe_test .venv/bin/python -m pytest   # against Postgres
+node --test tests/frontend.test.cjs  # Node 18+; workflow checks, no npm install needed
 ```

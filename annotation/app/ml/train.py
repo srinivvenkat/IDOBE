@@ -4,7 +4,7 @@ Each expert's current Outbreak / Not outbreak answer is one training row, weight
 (Unsure and Skip are left out). Two small models are cross-validated with folds grouped by series and
 the one with the lower log loss is kept. Accuracy is reported twice: on all labeled series (which
 over-represents hard cases, because the queue seeks them out) and on series whose first label came from
-a random draw (an unbiased estimate for the whole dataset).
+a random draw. The latter describes the sampled eligible pool, not a fixed population holdout.
 """
 
 import logging

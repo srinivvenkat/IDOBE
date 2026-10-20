@@ -18,6 +18,7 @@ const state = {
   mineOffset: 0,
   sessionCount: 0,    // labels (not skips) submitted since the page loaded
   busy: false,
+  pendingNext: false, // an answer was saved, but the next series has not loaded
 };
 
 const $ = (id) => document.getElementById(id);
@@ -143,14 +144,22 @@ function setConfidence(c) {
 }
 
 function updateSubmit() {
-  $("submit").disabled = state.busy || !state.outbreak || !state.label || !state.confidence;
-  $("skip").disabled = state.busy || !state.outbreak;
+  const locked = state.busy || state.pendingNext || !state.outbreak;
+  $("submit").disabled = locked || !state.label || !state.confidence;
+  $("skip").disabled = locked;
   $("back").disabled = state.busy || state.history.length === 0;
+  document.querySelectorAll(".label-btn, .conf-btn").forEach((b) => { b.disabled = locked; });
+  $("comment").disabled = locked;
+  $("resume").hidden = state.fromQueue && !state.pendingNext && !!state.outbreak;
+  $("resume").disabled = state.busy;
+  $("resume").textContent = state.pendingNext ? "Load next series" : "Continue annotating";
+  $("annotate").setAttribute("aria-busy", String(state.busy));
 }
 
 function show(o, { fromQueue }) {
   state.outbreak = o;
   state.fromQueue = fromQueue;
+  state.pendingNext = false;
   $("annotate").hidden = false;
   $("done").hidden = true;
   renderMeta(o);
@@ -180,6 +189,7 @@ async function loadNext() {
   const data = await api("/api/next");
   if (data.done) {
     state.outbreak = null;
+    state.pendingNext = false;
     $("annotate").hidden = true;
     $("done").hidden = false;
     updateSubmit();
@@ -189,8 +199,9 @@ async function loadNext() {
 }
 
 async function loadById(id, { pushHistory = true } = {}) {
+  const outbreak = await api(`/api/outbreaks/${id}`);
   if (pushHistory && state.outbreak && state.outbreak.id !== id) state.history.push(state.outbreak.id);
-  show(await api(`/api/outbreaks/${id}`), { fromQueue: false });
+  show(outbreak, { fromQueue: false });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -209,10 +220,12 @@ async function withBusy(fn) {
 }
 
 function save(label) {
+  if (state.pendingNext || (label !== "skip" && (!label || !state.confidence))) return;
   return withBusy(async () => {
     const o = state.outbreak;
     if (!o) return;
-    await api("/api/annotations", {
+    setStatus("Saving…");
+    const saved = await api("/api/annotations", {
       method: "POST",
       body: JSON.stringify({
         outbreak_id: o.id,
@@ -223,9 +236,15 @@ function save(label) {
       }),
     });
     state.history.push(o.id);
-    if (label !== "skip" && !o.my_annotation) state.sessionCount += 1;
-    await Promise.all([loadNext(), refreshMe(), loadMine()]);
-    setStatus(`Saved #${o.id} as “${LABEL_TEXT[label]}”.`);
+    if (label !== "skip" && (!o.my_annotation || o.my_annotation.label === "skip")) state.sessionCount += 1;
+    o.my_annotation = saved;
+    state.pendingNext = true;
+    // A failed refresh must never imply that the confirmed POST failed.
+    const results = await Promise.allSettled([loadNext(), refreshMe(), loadMine()]);
+    const failures = [];
+    if (results[0].status === "rejected") failures.push("Could not load the next series. Use “Load next series” to retry.");
+    if (results.slice(1).some((r) => r.status === "rejected")) failures.push("Progress or annotation history could not refresh; reload the page to update them.");
+    setStatus(`Saved #${o.id} as “${LABEL_TEXT[label]}”. ${failures.join(" ")}`.trim(), failures.length > 0);
   });
 }
 
@@ -248,7 +267,9 @@ async function loadMine() {
       );
       const open = () => withBusy(() => loadById(a.outbreak_id));
       tr.addEventListener("click", open);
-      tr.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.repeat) { e.preventDefault(); e.stopPropagation(); open(); }
+      });
       return tr;
     }));
   }
@@ -263,9 +284,16 @@ document.querySelectorAll(".label-btn").forEach((b) => b.addEventListener("click
 document.querySelectorAll(".conf-btn").forEach((b) => b.addEventListener("click", () => setConfidence(Number(b.dataset.conf))));
 $("submit").addEventListener("click", () => save(state.label));
 $("skip").addEventListener("click", () => save("skip"));
+$("resume").addEventListener("click", () => withBusy(async () => {
+  await loadNext();
+  setStatus("");
+}));
 $("back").addEventListener("click", () => withBusy(async () => {
-  const id = state.history.pop();
-  if (id !== undefined) await loadById(id, { pushHistory: false });
+  const id = state.history.at(-1);
+  if (id !== undefined) {
+    await loadById(id, { pushHistory: false });
+    state.history.pop();
+  }
 }));
 $("mine-prev").addEventListener("click", () => { state.mineOffset = Math.max(0, state.mineOffset - MINE_PAGE); loadMine(); });
 $("mine-next").addEventListener("click", () => { state.mineOffset += MINE_PAGE; loadMine(); });
@@ -283,6 +311,10 @@ function focusedOtherControl(target) {
 document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.altKey) return;
   const typing = e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement;
+  if (e.repeat || state.busy || state.pendingNext) {
+    if (!typing && !e.ctrlKey && /^(o|n|u|[1-5]|s|b|enter)$/i.test(e.key)) e.preventDefault();
+    return;
+  }
   if (typing) {
     if (e.key === "Enter" && e.ctrlKey && !$("submit").disabled) { e.preventDefault(); save(state.label); }
     if (e.key === "Escape") e.target.blur();
@@ -304,12 +336,10 @@ document.addEventListener("keydown", (e) => {
 // Re-color the chart when the OS theme flips.
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => state.outbreak && renderChart(state.outbreak));
 
-(async () => {
-  try {
-    await refreshMe();
-    const requested = Number(new URLSearchParams(location.search).get("id"));
-    await Promise.all([requested ? loadById(requested) : loadNext(), loadMine()]);
-  } catch (err) {
-    setStatus(err.message, true);
-  }
-})();
+withBusy(async () => {
+  await refreshMe();
+  const requested = Number(new URLSearchParams(location.search).get("id"));
+  const results = await Promise.allSettled([requested ? loadById(requested) : loadNext(), loadMine()]);
+  const failure = results.find((r) => r.status === "rejected");
+  if (failure) throw failure.reason;
+});
