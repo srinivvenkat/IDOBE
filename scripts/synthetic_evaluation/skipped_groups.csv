@@ -1,0 +1,4 @@
+disease,event,synthetic_n,eligible_real_n,reason
+INFLUENZA,HOSPITALIZATIONS,2,329,Requires minimum synthetic count and two disjoint real samples
+RSV,HOSPITALIZATIONS,1,50,Requires minimum synthetic count and two disjoint real samples
+WHOOPING COUGH [PERTUSSIS],CASES,3,238,Requires minimum synthetic count and two disjoint real samples
